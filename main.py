@@ -45,9 +45,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-TOKEN = "7744151945:AAHNTviI-k8Z2Cp6plRxoc5WZIiFSx4ZOs8"
-SPOTIFY_CLIENT_ID = "539a3af17aa24fbab30bd16b9a6551cd"
-SPOTIFY_CLIENT_SECRET = "c5c1d9354966474eb4a705bf3e2c886b"
+TOKEN = "7744151945:AAHNTviI-k8Z2Cp6plRxoc5WZIiFSx4ZOs8"  # Replace with your actual bot token from @Botfathet
+SPOTIFY_CLIENT_ID = "539a3af17aa24fbab30bd16b9a6551cd"  # Replace with your actual SPOTIFY_CLIENT_ID
+SPOTIFY_CLIENT_SECRET = "c5c1d9354966474eb4a705bf3e2c886b"  # Replace with your actual SPOTIFY_CLIENT_SECRET
 
 # Initialize Spotify client
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
