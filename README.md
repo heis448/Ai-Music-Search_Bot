@@ -11,7 +11,7 @@
 A python based telegram bot that can search 🔎, play and download songs from all sources in just one click. With a very good and simple user 👤 interface.Fork repo and 🌟 Star repository. Credits to the developer Tylor ~ Heis_Tech ▶️ 
 
 User Interface ↘️
-![Music Search Example](https://github.com/heis448/Ai-Music_Search/blob/b79f184d82b946a9d9707144d839137b90c79732/IMG_20250809_003434_971.jpg?raw=true)
+![Music Search Example](https://github.com/heis448/Ai-Music-Search_Bot/blob/main/IMG_20250809_003434_971.jpg?raw=true))
 
 Deployment Procedure on termux or Linux or Vps
 ➡️ Fork and star repository
