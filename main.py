@@ -17,15 +17,15 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import asyncio
 import time
+import subprocess
 from datetime import datetime, timedelta
 import json
 from collections import defaultdict
 import glob
 import sys
-import subprocess
 
 # The new GIF URL for the music visualizer
-MUSIC_VISUALIZER_GIF = "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExMXhvZ3ppbndrZWRocXNrN3E0OXVyenl2NmtwbWUzYXN2bGF1Z3pqdyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/cAfaWIcWr7qus/giphy.gif" 
+MUSIC_VISUALIZER_GIF = "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExMXhvZ3ppbndrZWRocXNrN3E0OXVyenl2NmtwbWUzYXN2bGF1Z3pqdyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/cAfaWIcWr7qus/giphy.gif"
 # Track first-time users and store user data
 user_data = defaultdict(dict)
 
@@ -45,9 +45,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-TOKEN = "7744151945:AAHNTviI-k8Z2Cp6plRxoc5WZIiFSx4ZOs8"  # Replace with your actual bot token from @Botfathet
-SPOTIFY_CLIENT_ID = "539a3af17aa24fbab30bd16b9a6551cd"  # Replace with your actual SPOTIFY_CLIENT_ID
-SPOTIFY_CLIENT_SECRET = "c5c1d9354966474eb4a705bf3e2c886b"  # Replace with your actual SPOTIFY_CLIENT_SECRET
+TOKEN = "7744151945:AAHNTviI-k8Z2Cp6plRxoc5WZIiFSx4ZOs8"
+SPOTIFY_CLIENT_ID = "539a3af17aa24fbab30bd16b9a6551cd"
+SPOTIFY_CLIENT_SECRET = "c5c1d9354966474eb4a705bf3e2c8880"
 
 # Initialize Spotify client
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
@@ -190,6 +190,9 @@ async def start(update: Update, context: CallbackContext) -> None:
 
 async def update_command(update: Update, context: CallbackContext) -> None:
     """Check for and apply updates from the git repository."""
+    
+    # Removed the admin check to allow all users to use this command.
+    
     await update.effective_message.reply_text("🔄 Checking for updates...")
 
     try:
@@ -207,6 +210,16 @@ async def update_command(update: Update, context: CallbackContext) -> None:
     except Exception as e:
         logger.error(f"Error during update command: {e}")
         await update.effective_message.reply_text("❌ An unexpected error occurred during the update process.")
+
+async def restart_command(update: Update, context: CallbackContext) -> None:
+    """Restart the bot (admin only)."""
+    user_id = update.effective_user.id
+    if user_id not in ADMINS:
+        await update.effective_message.reply_text("🚫 You are not authorized to use this command.")
+        return
+
+    await update.effective_message.reply_text("🔄 Restarting bot...")
+    os.execl(sys.executable, sys.executable, *sys.argv)
 
 async def ping_command(update: Update, context: CallbackContext) -> None:
     """Test bot response speed."""
@@ -728,10 +741,11 @@ async def download_youtube_audio(update: Update, context: CallbackContext, url: 
             }],
             'outtmpl': 'audio_downloads/%(title)s.%(ext)s',
             'quiet': True,
-            'cookiefile': 'cookies.txt'
+            'cookiefile': 'cookies.txt'  # Add this line
         }
         with yt_dlp.YoutubeDL(ydl_opts_mp3) as ydl:
             info = ydl.extract_info(url, download=True)
+            # Correctly get the final file path after post-processing
             title = info.get('title', 'Audio')
             temp_filepath = ydl.prepare_filename(info).rsplit('.', 1)[0]
             audio_file_path = glob.glob(f"{temp_filepath}.*")[0]
@@ -771,7 +785,7 @@ async def download_youtube_video(update: Update, context: CallbackContext, url: 
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'outtmpl': 'downloads/%(title)s.%(ext)s',
             'quiet': True,
-            'cookiefile': 'cookies.txt'
+            'cookiefile': 'cookies.txt' # Add this line
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -824,13 +838,14 @@ async def search_and_send_audio(update: Update, context: CallbackContext, query:
             'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
             'outtmpl': 'audio_downloads/%(title)s.%(ext)s',
             'quiet': True,
-            'cookiefile': 'cookies.txt'
+            'cookiefile': 'cookies.txt' # Add this line
         }
         with yt_dlp.YoutubeDL(ydl_opts_mp3) as ydl:
             info = ydl.extract_info(f"ytsearch:{query}", download=True)
             if not info or not info.get('entries'):
                 raise ValueError("No results found on YouTube")
             entry = info['entries'][0]
+            # Correctly get the final file path after post-processing
             temp_filepath = ydl.prepare_filename(entry).rsplit('.', 1)[0]
             audio_file_path = glob.glob(f"{temp_filepath}.*")[0]
             title = entry.get('title', 'Audio Track')
@@ -840,7 +855,7 @@ async def search_and_send_audio(update: Update, context: CallbackContext, query:
                 InlineQueryResultArticle(
                     id=str(uuid4()),
                     title=f"🎵 {title}",
-                    input_message_content=InputTextMessageContent(f"Please send the song name to the bot for download: {title}")
+                    input_message_content=InputTextMessageContent(f"Download request for '{title}'.")
                 )
             ], cache_time=0)
         else:
@@ -892,7 +907,7 @@ async def inline_query(update: Update, context: CallbackContext) -> None:
             'noplaylist': True,
             'quiet': True,
             'force_generic_extractor': True,
-            'cookiefile': 'cookies.txt'
+            'cookiefile': 'cookies.txt' # Add this line
         }
         with yt_dlp.YoutubeDL(ydl_opts_inline) as ydl:
             info = ydl.extract_info(query, download=False)
@@ -900,11 +915,14 @@ async def inline_query(update: Update, context: CallbackContext) -> None:
                 raise ValueError("No results found.")
             results = []
             for i, entry in enumerate(info.get('entries', [])[:10]):
+                audio_url = entry.get('url')
                 title = entry.get('title', 'Audio Track')
+                duration = entry.get('duration', 0)
                 results.append(
                     InlineQueryResultArticle(
                         id=str(uuid4()),
                         title=f"🎵 {title}",
+                        # Directs the user to the bot for the actual download
                         input_message_content=InputTextMessageContent(f"Please send the song name to the bot for download: {title}")
                     )
                 )
@@ -943,10 +961,11 @@ async def download_and_send_audio(bot, chat_id, url, caption=None):
             }],
             'outtmpl': 'audio_downloads/%(title)s.%(ext)s',
             'quiet': True,
-            'cookiefile': 'cookies.txt'
+            'cookiefile': 'cookies.txt' # Add this line
         }
         with yt_dlp.YoutubeDL(ydl_opts_mp3) as ydl:
             info = ydl.extract_info(url, download=True)
+            # Correctly get the final file path after post-processing
             title = info.get('title', 'Audio')
             temp_filepath = ydl.prepare_filename(info).rsplit('.', 1)[0]
             audio_file_path = glob.glob(f"{temp_filepath}.*")[0]
@@ -1002,10 +1021,8 @@ def main() -> None:
     application.add_handler(CommandHandler("usr", usr_command))
     application.add_handler(CommandHandler("ping", ping_command))
     application.add_handler(CommandHandler("uptime", uptime_command))
-    application.add_handler(CommandHandler("update", update_command)) # Changed to /update
-    # The /restart command can still be useful for admins to perform a quick restart without a full git pull.
-    # We will leave the /restart command handler but make sure it's for admins only.
-    application.add_handler(CommandHandler("restart", lambda update, context: os.execl(sys.executable, sys.executable, *sys.argv) if update.effective_user.id in ADMINS else update.effective_message.reply_text("🚫 You are not authorized to use this command.")))
+    application.add_handler(CommandHandler("update", update_command))
+    application.add_handler(CommandHandler("restart", restart_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(MessageHandler(filters.VOICE, handle_voice))
     application.add_handler(InlineQueryHandler(inline_query))
