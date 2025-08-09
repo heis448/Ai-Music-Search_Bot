@@ -30,7 +30,7 @@ MUSIC_VISUALIZER_GIF = "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExMXhvZ3
 user_data = defaultdict(dict)
 
 # Admin list (add your Telegram user ID here)
-ADMINS = [7928993116]  # Replace with your actual Telegram ID
+ADMINS = [7928993116]  # Replace with your actual Telegram ID  
 
 # Banned users list
 banned_users = set()
@@ -45,9 +45,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-TOKEN = "7744151945:AAHNTviI-k8Z2Cp6plRxoc5WZIiFSx4ZOs8"
-SPOTIFY_CLIENT_ID = "539a3af17aa24fbab30bd16b9a6551cd"
-SPOTIFY_CLIENT_SECRET = "c5c1d9354966474eb4a705bf3e2c8880"
+TOKEN = "7744151945:AAHNTviI-k8Z2Cp6plRxoc5WZIiFSx4ZOs8" # Replace with your actual bot token from @Botfather
+SPOTIFY_CLIENT_ID = "539a3af17aa24fbab30bd16b9a6551cd"  # Replace with your actual SPOTIFY_CLIENT_ID
+SPOTIFY_CLIENT_SECRET = "c5c1d9354966474eb4a705bf3e2c8880"  # Replace with your actual SPOTIFY_CLIENT_SECRET
 
 # Initialize Spotify client
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
