@@ -23,14 +23,18 @@ import json
 from collections import defaultdict
 import glob
 import sys
+import shutil
 
 # The new GIF URL for the music visualizer
 MUSIC_VISUALIZER_GIF = "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExMXhvZ3ppbndrZWRocXNrN3E0OXVyenl2NmtwbWUzYXN2bGF1Z3pqdyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/cAfaWIcWr7qus/giphy.gif"
 # Track first-time users and store user data
 user_data = defaultdict(dict)
+user_requests = defaultdict(list)
+RATE_LIMIT_INTERVAL = 60 # 1 minute
+RATE_LIMIT_COUNT = 5 # 5 requests per minute
 
 # Admin list (add your Telegram user ID here)
-ADMINS = [7928993116]  # Replace with your actual Telegram ID  
+ADMINS = [7928993116]  # Replace with your actual Telegram ID
 
 # Banned users list
 banned_users = set()
@@ -45,9 +49,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-TOKEN = "7744151945:AAHNTviI-k8Z2Cp6plRxoc5WZIiFSx4ZOs8" # Replace with your actual bot token from @Botfather
-SPOTIFY_CLIENT_ID = "539a3af17aa24fbab30bd16b9a6551cd"  # Replace with your actual SPOTIFY_CLIENT_ID
-SPOTIFY_CLIENT_SECRET = "c5c1d9354966474eb4a705bf3e2c8880"  # Replace with your actual SPOTIFY_CLIENT_SECRET
+TOKEN = "7744151945:AAHNTviI-k8Z2Cp6plRxoc5WZIiFSx4ZOs8"
+SPOTIFY_CLIENT_ID = "539a3af17aa24fbab30bd16b9a6551cd"
+SPOTIFY_CLIENT_SECRET = "c5c1d9354966474eb4a705bf3e2c8880"
 
 # Initialize Spotify client
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
@@ -143,15 +147,26 @@ async def start(update: Update, context: CallbackContext) -> None:
     end_time = time.time()
     ping_latency = round((end_time - start_time) * 1000, 2)
     
-    # Construct the new welcome message with the required format
+    # Get disk space stats
+    try:
+        path = os.getcwd()
+        total, used, free = shutil.disk_usage(path)
+        disk_space_str = f"{format_bytes(used)}/{format_bytes(total)} ({used / total:.2%})"
+    except Exception as e:
+        logger.error(f"Error getting disk stats for welcome message: {e}")
+        disk_space_str = "N/A"
+
+    # Construct the new welcome message from the user's template
     welcome_msg_text = (
         f"╭──《 Ai Music Search Bot🌟》──⊰\n"
         f"│\n"
-        f"│ ⚡ 𝗨𝗽𝘁𝗶𝗺𝗲: {uptime_str}\n"
+        f"│ ⚡ 𝗨𝗽𝘁𝗶𝗺𝗲 : {uptime_str}\n"
         f"│\n"
         f"│ 💫Ping : {ping_latency}ms\n"
+        f"│ \n"
+        f"│💿 Disk : {disk_space_str}\n"
         f"│\n"
-        f"│ 📊 𝗨𝘀𝗲𝗿𝘀: {total_users}\n"
+        f"│ 📊 𝗨𝘀𝗲𝗿𝘀 : {total_users}\n"
         f"│\n"
         f"│ 📅 𝗗𝗔𝗧𝗘 : {current_datetime}\n"
         f"│\n"
@@ -174,7 +189,7 @@ async def start(update: Update, context: CallbackContext) -> None:
         f"1. Send me a song name or URL\n"
         f"2. Use inline mode: @Aimusicsearchbot <song name>\n"
         f"3. Send a voice note with song name\n\n"
-        f"Bot developed by Tylor ~ Heis_Tech 💫"
+        f"Bot developed by Tylor ~Heis_Tech💫"
     )
 
     # Delete the "Calculating ping..." message
@@ -257,7 +272,8 @@ async def menu_command(update: Update, context: CallbackContext) -> None:
         "│   ├── /ping - Test bot response speed 🚤\n"
         "│   ├── /uptime - Show bot uptime ⌚\n"
         "│   ├── /update - Check for and apply updates✅\n"
-        "│   └── /restart - Restart the bot 💻(admin only)\n"
+        "│   ├── /restart - Restart the bot 💻(admin only)\n"
+        "│   └── /disk_stats - Show disk space usage 💾\n"
         "│\n"
         "├── Music Commands/\n"
         "│   ├── /artist <name> - Search for artist tracks🎶\n"
@@ -350,7 +366,8 @@ async def help_command(update: Update, context: CallbackContext) -> None:
         "│   ├── /ping - Test bot response speed\n"
         "│   ├── /uptime - Show bot uptime\n"
         "│   ├── /update - Check for and apply updates\n"
-        "│   └── /restart - Restart the bot (admin only)\n"
+        "│   ├── /restart - Restart the bot (admin only)\n"
+        "│   └── /disk_stats - Show disk space usage\n"
         "│\n"
         "├── Music Commands/\n"
         "│   ├── /artist <name> - Search for artist tracks\n"
@@ -646,14 +663,22 @@ async def artist_command(update: Update, context: CallbackContext) -> None:
         await processing_msg.edit_text("Sorry, I couldn't find that artist. Please try another name.")
 
 async def handle_message(update: Update, context: CallbackContext) -> None:
-    """Handle all text messages with improved artist detection."""
+    """Handle all text messages with improved artist detection and rate limiting."""
     user = update.message.from_user
     user_id = user.id
 
     if user_id in banned_users:
         await update.message.reply_text("🚫 You are banned from using this bot.")
         return
-
+    
+    current_time = time.time()
+    user_requests[user_id] = [t for t in user_requests[user_id] if current_time - t < RATE_LIMIT_INTERVAL]
+    
+    if len(user_requests[user_id]) >= RATE_LIMIT_COUNT:
+        await update.message.reply_text("⏳ You are sending too many requests. Please wait a moment before trying again.")
+        return
+    
+    user_requests[user_id].append(current_time)
     await store_user_info(user)
 
     text = update.message.text
@@ -728,9 +753,27 @@ async def handle_url(update: Update, context: CallbackContext, url: str) -> None
         await update.message.reply_text("Sorry, I couldn't process that URL. Please try another one.")
 
 async def download_youtube_audio(update: Update, context: CallbackContext, url: str) -> None:
-    """Download audio from YouTube."""
+    """Download audio from YouTube with progress updates."""
     chat_id = update.effective_chat.id
+    message = await context.bot.send_message(chat_id, "📥 Starting download...")
     audio_file_path = None
+    
+    def progress_hook(d):
+        if d['status'] == 'downloading':
+            p_percentage = d['_percent_str']
+            p_eta = d['_eta_str']
+            asyncio.run(context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message.message_id,
+                text=f"📥 Downloading... {p_percentage} with {p_eta} left"
+            ))
+        elif d['status'] == 'finished':
+            asyncio.run(context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message.message_id,
+                text="✅ Download complete. Uploading audio..."
+            ))
+    
     try:
         ydl_opts_mp3 = {
             'format': 'bestaudio/best',
@@ -741,7 +784,8 @@ async def download_youtube_audio(update: Update, context: CallbackContext, url: 
             }],
             'outtmpl': 'audio_downloads/%(title)s.%(ext)s',
             'quiet': True,
-            'cookiefile': 'cookies.txt'  # Add this line
+            'cookiefile': 'cookies.txt',
+            'progress_hooks': [progress_hook] # Add progress hook
         }
         with yt_dlp.YoutubeDL(ydl_opts_mp3) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -758,34 +802,49 @@ async def download_youtube_audio(update: Update, context: CallbackContext, url: 
                 performer=info.get('artist', 'YouTube'),
                 caption=f"🎵 {title}\n\nBot developed by Tylor ~ Heis_Tech ✅"
             )
+        await context.bot.delete_message(chat_id=chat_id, message_id=message.message_id)
+
     except yt_dlp.utils.DownloadError as e:
         logger.error(f"yt-dlp Download Error: {e}")
         error_msg = f"Failed to download audio. Error: {e}"
-        if update.message:
-            await update.message.reply_text(error_msg)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(error_msg)
+        await context.bot.edit_message_text(chat_id=chat_id, message_id=message.message_id, text=error_msg)
     except Exception as e:
         logger.error(f"General YouTube audio download error: {e}")
         error_msg = "An unexpected error occurred while downloading the audio. Please try another link."
-        if update.message:
-            await update.message.reply_text(error_msg)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(error_msg)
+        await context.bot.edit_message_text(chat_id=chat_id, message_id=message.message_id, text=error_msg)
     finally:
         if audio_file_path and os.path.exists(audio_file_path):
             os.remove(audio_file_path)
 
 async def download_youtube_video(update: Update, context: CallbackContext, url: str) -> None:
-    """Download video from YouTube."""
+    """Download video from YouTube with progress updates."""
     chat_id = update.effective_chat.id
+    message = await context.bot.send_message(chat_id, "📥 Starting download...")
     video_file_path = None
+
+    def progress_hook(d):
+        if d['status'] == 'downloading':
+            p_percentage = d['_percent_str']
+            p_eta = d['_eta_str']
+            asyncio.run(context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message.message_id,
+                text=f"📥 Downloading... {p_percentage} with {p_eta} left"
+            ))
+        elif d['status'] == 'finished':
+            asyncio.run(context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message.message_id,
+                text="✅ Download complete. Uploading video..."
+            ))
+
     try:
         ydl_opts = {
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'outtmpl': 'downloads/%(title)s.%(ext)s',
             'quiet': True,
-            'cookiefile': 'cookies.txt' # Add this line
+            'cookiefile': 'cookies.txt',
+            'progress_hooks': [progress_hook] # Add progress hook
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -797,20 +856,16 @@ async def download_youtube_video(update: Update, context: CallbackContext, url: 
                 video=video,
                 caption=f"🎥 {title}\n\nBot developed by Tylor ~ Heis_Tech ✅"
             )
+        await context.bot.delete_message(chat_id=chat_id, message_id=message.message_id)
+
     except yt_dlp.utils.DownloadError as e:
         logger.error(f"yt-dlp Video Download Error: {e}")
         error_msg = f"Failed to download video. Error: {e}"
-        if update.message:
-            await update.message.reply_text(error_msg)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(error_msg)
+        await context.bot.edit_message_text(chat_id=chat_id, message_id=message.message_id, text=error_msg)
     except Exception as e:
         logger.error(f"General YouTube video download error: {e}")
         error_msg = "An unexpected error occurred while downloading the video. Please try another link."
-        if update.message:
-            await update.message.reply_text(error_msg)
-        elif update.callback_query:
-            await update.callback_query.edit_message_text(error_msg)
+        await context.bot.edit_message_text(chat_id=chat_id, message_id=message.message_id, text=error_msg)
     finally:
         if video_file_path and os.path.exists(video_file_path):
             os.remove(video_file_path)
@@ -832,13 +887,17 @@ async def search_and_send_audio(update: Update, context: CallbackContext, query:
         return
 
     audio_file_path = None
+    message = None
     try:
+        if not update.inline_query:
+            message = await update.effective_message.reply_text("📥 Searching and preparing your audio...")
+
         ydl_opts_mp3 = {
             'format': 'bestaudio/best',
             'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
             'outtmpl': 'audio_downloads/%(title)s.%(ext)s',
             'quiet': True,
-            'cookiefile': 'cookies.txt' # Add this line
+            'cookiefile': 'cookies.txt'
         }
         with yt_dlp.YoutubeDL(ydl_opts_mp3) as ydl:
             info = ydl.extract_info(f"ytsearch:{query}", download=True)
@@ -868,6 +927,8 @@ async def search_and_send_audio(update: Update, context: CallbackContext, query:
                     performer=entry.get('artist', 'YouTube'),
                     caption=f"🎵 {title}\n\nBot developed by Tylor ~ Heis_Tech ✅"
                 )
+            await context.bot.delete_message(chat_id=chat_id, message_id=message.message_id)
+
     except Exception as e:
         logger.error(f"Search and download error: {e}")
         error_message = "Sorry, I couldn't find or download that song. Please try another query."
@@ -879,6 +940,8 @@ async def search_and_send_audio(update: Update, context: CallbackContext, query:
                     input_message_content=InputTextMessageContent(error_message)
                 )
             ], cache_time=0)
+        elif message:
+            await context.bot.edit_message_text(chat_id=update.effective_chat.id, message_id=message.message_id, text=error_message)
         else:
             await update.effective_message.reply_text(error_message)
     finally:
@@ -907,7 +970,7 @@ async def inline_query(update: Update, context: CallbackContext) -> None:
             'noplaylist': True,
             'quiet': True,
             'force_generic_extractor': True,
-            'cookiefile': 'cookies.txt' # Add this line
+            'cookiefile': 'cookies.txt'
         }
         with yt_dlp.YoutubeDL(ydl_opts_inline) as ydl:
             info = ydl.extract_info(query, download=False)
@@ -961,7 +1024,7 @@ async def download_and_send_audio(bot, chat_id, url, caption=None):
             }],
             'outtmpl': 'audio_downloads/%(title)s.%(ext)s',
             'quiet': True,
-            'cookiefile': 'cookies.txt' # Add this line
+            'cookiefile': 'cookies.txt'
         }
         with yt_dlp.YoutubeDL(ydl_opts_mp3) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -989,6 +1052,37 @@ async def download_and_send_audio(bot, chat_id, url, caption=None):
         if audio_file_path and os.path.exists(audio_file_path):
             os.remove(audio_file_path)
 
+def format_bytes(bytes_value):
+    """Convert bytes to a human-readable format (e.g., KB, MB, GB)."""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if bytes_value < 1024.0:
+            return f"{bytes_value:.2f} {unit}"
+        bytes_value /= 1024.0
+    return f"{bytes_value:.2f} PB"
+
+async def disk_stats_command(update: Update, context: CallbackContext) -> None:
+    """Show disk space usage (admin only)."""
+    user_id = update.message.from_user.id
+    if user_id not in ADMINS:
+        await update.message.reply_text("🚫 You are not authorized to use this command.")
+        return
+
+    path = os.getcwd()  # Get stats for the current working directory
+    try:
+        total, used, free = shutil.disk_usage(path)
+
+        stats_text = (
+            f"💾 Disk Space Statistics for `{path}`:\n\n"
+            f"  - Total: {format_bytes(total)}\n"
+            f"  - Used: {format_bytes(used)}\n"
+            f"  - Free: {format_bytes(free)}\n"
+            f"  - Usage: {used / total:.2%}"
+        )
+        await update.message.reply_text(stats_text, parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"Error getting disk stats: {e}")
+        await update.message.reply_text("❌ An error occurred while retrieving disk space statistics.")
+
 async def post_init(application: Application) -> None:
     """Function to run after the bot starts."""
     await load_user_data()
@@ -1006,7 +1100,7 @@ async def post_init(application: Application) -> None:
 def main() -> None:
     """Start the bot."""
     global application
-    application = Application.builder().token(TOKEN).post_init(post_init).read_timeout(20).write_timeout(20).pool_timeout(20).build()
+    application = Application.builder().token(TOKEN).post_init(post_init).read_timeout(60).write_timeout(60).pool_timeout(60).build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("menu", menu_command))
@@ -1023,6 +1117,7 @@ def main() -> None:
     application.add_handler(CommandHandler("uptime", uptime_command))
     application.add_handler(CommandHandler("update", update_command))
     application.add_handler(CommandHandler("restart", restart_command))
+    application.add_handler(CommandHandler("disk_stats", disk_stats_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(MessageHandler(filters.VOICE, handle_voice))
     application.add_handler(InlineQueryHandler(inline_query))
