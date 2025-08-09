@@ -49,7 +49,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-TOKEN = "7744151945:AAHNTviI-k8Z2Cp6plRxoc5WZIiFSx4ZOs8"
+TOKEN = "7744151945:AAG2Kdk5ChdDdSP56xcJ8Q8LM4mmc1tbSAE"
 SPOTIFY_CLIENT_ID = "539a3af17aa24fbab30bd16b9a6551cd"
 SPOTIFY_CLIENT_SECRET = "c5c1d9354966474eb4a705bf3e2c8880"
 
